@@ -1,38 +1,45 @@
 from flask import Flask, request, jsonify
+import os
+from groq import Groq   # pip install groq
 
 app = Flask(__name__)
 
-# Default route (just to check if server works)
+# Initialize Groq client (make sure GROQ_API_KEY is set in Render environment variables)
+client = Groq(api_key=os.environ.get("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"))
+
 @app.route('/')
 def home():
-    return "Hello, your Flask app is running!"
+    return "Flask app running with AI responses!"
 
-# Webhook route for Dialogflow
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    # Get request data from Dialogflow
     req = request.get_json(force=True)
-
-    # Extract intent name
     intent = req.get("queryResult").get("intent").get("displayName")
+    user_message = req.get("queryResult").get("queryText")
 
-    # Example handling
-    if intent == "BookFlight":
-        params = req.get("queryResult").get("parameters")
-        source = params.get("source-city")
-        destination = params.get("destination-city")
-        date = params.get("date")
+    # Default prompt
+    prompt = f"You are a helpful AI assistant. User asked: {user_message}"
 
-        response_text = f"Booking your flight from {source} to {destination} on {date}."
-    else:
-        response_text = "I’m not sure what you mean."
+    if intent == "get_overview":
+        prompt = f"Give a simple overview explanation about {user_message}."
+    elif intent == "get_detail":
+        prompt = f"Explain in detail about {user_message}."
+    elif intent == "next_topic":
+        prompt = f"Suggest the next topic the user should learn after {user_message}."
 
-    # Return response to Dialogflow
-    return jsonify({"fulfillmentText": response_text})
+    # Call Groq LLM
+    response = client.chat.completions.create(
+        model="llama3-8b-8192",   # choose Groq model
+        messages=[
+            {"role": "system", "content": "You are an AI assistant that answers clearly."},
+            {"role": "user", "content": prompt}
+        ],
+    )
 
+    ai_text = response.choices[0].message.content
+
+    return jsonify({"fulfillmentText": ai_text})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
-
-
 
